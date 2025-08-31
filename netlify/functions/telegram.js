@@ -1,6 +1,7 @@
-export default async function handler(req, res) {
-  if (req.method === "POST") {
-    const { message } = req.body;
+export async function handler(event, context) {
+  if (event.httpMethod === "POST") {
+    const body = JSON.parse(event.body);
+    const message = body.message;
 
     if (message && message.text === "/start") {
       const chatId = message.chat.id;
@@ -17,19 +18,24 @@ export default async function handler(req, res) {
                 {
                   text: "🚀 Open App",
                   web_app: {
-                    url: "https://spotysport.netlify.app/" // Replace with your Next.js URL
-                  }
-                }
-              ]
-            ]
-          }
+                    url: "https://spotysport.netlify.app/",
+                  },
+                },
+              ],
+            ],
+          },
         }),
       });
     }
 
-    return res.status(200).send("OK");
+    return {
+      statusCode: 200,
+      body: "OK",
+    };
   } else {
-    res.setHeader("Allow", ["POST"]);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
+    return {
+      statusCode: 405,
+      body: `Method ${event.httpMethod} Not Allowed`,
+    };
   }
 }
