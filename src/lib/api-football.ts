@@ -20,8 +20,10 @@ const currentMonth = today.getMonth() + 1;
 const defaultSeason = currentMonth >= 8 ? currentYear : currentYear - 1;
 
 async function fetchFromApi(endpoint: string, params: Record<string, string>) {
-  // ✅ Force dynamic season for all API calls
-  params.season = defaultSeason.toString();
+  // ✅ If no season passed, use defaultSeason
+  if (!params.season) {
+    params.season = defaultSeason.toString();
+  }
 
   const url = new URL(`${API_URL}/${endpoint}`);
   Object.entries(params).forEach(([key, value]) =>
@@ -52,4 +54,29 @@ async function fetchFromApi(endpoint: string, params: Record<string, string>) {
     console.error('Failed to fetch from API-Football', error);
     return [];
   }
+}
+
+export async function getFixtures(params: {
+  live?: string;
+  date?: string;
+  league?: string;
+  season?: string;
+}) {
+  return fetchFromApi('fixtures', params);
+}
+
+export async function getStandings(params: {
+  league: string;
+  season?: string; // ✅ Made optional
+}) {
+  const response = await fetchFromApi('standings', params);
+  // The standings are nested inside the response
+  return response[0]?.league?.standings[0] || [];
+}
+
+export async function getTeams(params: {
+  league: string;
+  season?: string; // ✅ Made optional
+}) {
+  return fetchFromApi('teams', params);
 }
