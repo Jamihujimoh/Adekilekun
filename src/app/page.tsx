@@ -5,73 +5,71 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-
 import { OverviewCard } from '@/components/dashboard/overview-card';
 import { GenAIPanel } from '@/components/dashboard/gen-ai-panel';
 import { FileText, Signal, Users, BrainCircuit } from 'lucide-react';
 import { PLAYERS } from '@/lib/data';
 import { RecentMatches } from '@/components/dashboard/recent-matches';
 import { ClubStatsTable } from '@/components/dashboard/club-stats-table';
-
 import { getFixtures, getStandings, getTeams } from '@/lib/api-football';
-import {
-  getCurrentStandings,
-  getTodayFixtures,
-  getTeams as getFDTeams,
-} from '@/lib/api-footballdata';
-
+import { getCurrentStandings, getTodayFixtures, getTeams as getFDTeams } from '@/lib/api-footballdata';
 import type { Team } from '@/types';
 
 export default async function DashboardPage() {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
 
-  // Determine season
-  const currentSeason = 2025;
+  // --- Determine season ---
+  const currentSeason = now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
   // --- Standings ---
   let standings = await getStandings({ league: '39', season: currentSeason.toString() });
   let fallbackSeasonUsed = false;
 
   if (!standings || standings.length === 0) {
-    // fallback to football-data.org for current season
     const fdStandingsData = await getCurrentStandings();
-    if (fdStandingsData && fdStandingsData.length > 0) {
-      standings = fdStandingsData;
-    } else {
-      // fallback to API-Football previous season
-      standings = await getStandings({ league: '39', season: (currentSeason - 1).toString() });
-      fallbackSeasonUsed = true;
-    }
+    standings = fdStandingsData?.map((team: any) => ({
+      ...team,
+      played: team?.played ?? 0,
+      points: team?.points ?? 0,
+      won: team?.won ?? 0,
+      draw: team?.draw ?? 0,
+      lost: team?.lost ?? 0,
+      goalsFor: team?.goalsFor ?? 0,
+      goalsAgainst: team?.goalsAgainst ?? 0,
+      goalDifference: team?.goalDifference ?? 0,
+      team: team?.team ?? { name: 'Unknown', id: 0 },
+    })) || [];
+
+    fallbackSeasonUsed = true;
   }
 
   // --- Fixtures ---
   let liveFixtures = await getFixtures({ live: 'all', season: currentSeason.toString() });
   if (!liveFixtures || liveFixtures.length === 0) {
     const fdFixturesData = await getTodayFixtures();
-    liveFixtures = fdFixturesData || [];
+    liveFixtures = fdFixturesData?.map((m: any) => ({ ...m })) || [];
   }
 
   let allFixtures = await getFixtures({ date: today, season: currentSeason.toString() });
   if (!allFixtures || allFixtures.length === 0) {
     const fdTodayFixtures = await getTodayFixtures();
-    allFixtures = fdTodayFixtures || [];
+    allFixtures = fdTodayFixtures?.map((m: any) => ({ ...m })) || [];
   }
 
   // --- Teams ---
   let teamsData = await getTeams({ league: '39', season: currentSeason.toString() });
   if (!teamsData || teamsData.length === 0) {
     const fdTeamsData = await getFDTeams();
-    teamsData = fdTeamsData || [];
+    teamsData = fdTeamsData?.map((t: any) => ({ team: t })) || [];
   }
-  const teams: Team[] = teamsData.map((t: any) => t.team || t);
 
-  // Separate matches
-  const upcomingMatches = allFixtures.filter(
-    (m) => m.status?.short === 'NS' || m.status === 'SCHEDULED'
-  );
+  const teams: Team[] = teamsData.map((t: any) => t.team || { name: 'Unknown', id: 0 });
+
+  // --- Separate matches safely ---
+  const upcomingMatches = allFixtures.filter((m) => m?.fixture?.status?.short === 'NS');
   const completedMatches = allFixtures
-    .filter((m) => m.status?.short === 'FT' || m.status === 'FINISHED')
+    .filter((m) => m?.fixture?.status?.short === 'FT')
     .slice(0, 10);
 
   return (
@@ -112,7 +110,7 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Premier League Standings</CardTitle>
             <CardDescription>
-              Current club standings for the {fallbackSeasonUsed ? currentSeason - 1 : currentSeason} season.
+              Current club standings for the {fallbackSeasonUsed ? currentSeason - 1 : currentSeason} season
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -134,5 +132,4 @@ export default async function DashboardPage() {
       </div>
     </div>
   );
-}	
-
+}
