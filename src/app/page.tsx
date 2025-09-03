@@ -12,64 +12,53 @@ import { PLAYERS } from '@/lib/data';
 import { RecentMatches } from '@/components/dashboard/recent-matches';
 import { ClubStatsTable } from '@/components/dashboard/club-stats-table';
 import { getFixtures, getStandings, getTeams } from '@/lib/api-football';
-import { getCurrentStandings, getTodayFixtures, getTeams as getFDTeams } from '@/lib/api-footballdata';
+import { getCurrentStandings, getTodayFixtures, getFDTeams } from '@/lib/api-footballdata';
 import type { Team } from '@/types';
 
 export default async function DashboardPage() {
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
-
-  // --- Determine season ---
   const currentSeason = now.getMonth() + 1 >= 8 ? now.getFullYear() : now.getFullYear() - 1;
 
   // --- Standings ---
   let standings = await getStandings({ league: '39', season: currentSeason.toString() });
   let fallbackSeasonUsed = false;
 
-  if (!standings || standings.length === 0) {
+  if (!standings || !Array.isArray(standings) || standings.length === 0) {
     const fdStandingsData = await getCurrentStandings();
-    standings = fdStandingsData?.map((team: any) => ({
-      ...team,
-      played: team?.played ?? 0,
-      points: team?.points ?? 0,
-      won: team?.won ?? 0,
-      draw: team?.draw ?? 0,
-      lost: team?.lost ?? 0,
-      goalsFor: team?.goalsFor ?? 0,
-      goalsAgainst: team?.goalsAgainst ?? 0,
-      goalDifference: team?.goalDifference ?? 0,
-      team: team?.team ?? { name: 'Unknown', id: 0 },
-    })) || [];
-
-    fallbackSeasonUsed = true;
+    if (fdStandingsData?.standings?.length > 0) {
+      standings = fdStandingsData.standings[0].table;
+    } else {
+      standings = await getStandings({ league: '39', season: (currentSeason - 1).toString() });
+      fallbackSeasonUsed = true;
+    }
   }
 
   // --- Fixtures ---
   let liveFixtures = await getFixtures({ live: 'all', season: currentSeason.toString() });
-  if (!liveFixtures || liveFixtures.length === 0) {
+  if (!liveFixtures || !Array.isArray(liveFixtures)) {
     const fdFixturesData = await getTodayFixtures();
-    liveFixtures = fdFixturesData?.map((m: any) => ({ ...m })) || [];
+    liveFixtures = fdFixturesData?.matches ?? [];
   }
 
   let allFixtures = await getFixtures({ date: today, season: currentSeason.toString() });
-  if (!allFixtures || allFixtures.length === 0) {
+  if (!allFixtures || !Array.isArray(allFixtures)) {
     const fdTodayFixtures = await getTodayFixtures();
-    allFixtures = fdTodayFixtures?.map((m: any) => ({ ...m })) || [];
+    allFixtures = fdTodayFixtures?.matches ?? [];
   }
 
   // --- Teams ---
   let teamsData = await getTeams({ league: '39', season: currentSeason.toString() });
-  if (!teamsData || teamsData.length === 0) {
+  if (!teamsData || !Array.isArray(teamsData) || teamsData.length === 0) {
     const fdTeamsData = await getFDTeams();
-    teamsData = fdTeamsData?.map((t: any) => ({ team: t })) || [];
+    teamsData = fdTeamsData?.teams ?? [];
   }
-
-  const teams: Team[] = teamsData.map((t: any) => t.team || { name: 'Unknown', id: 0 });
+  const teams: Team[] = teamsData.map((t: any) => t.team ?? t);
 
   // --- Separate matches safely ---
-  const upcomingMatches = allFixtures.filter((m) => m?.fixture?.status?.short === 'NS');
+  const upcomingMatches = allFixtures.filter((m) => m?.status?.short === 'NS');
   const completedMatches = allFixtures
-    .filter((m) => m?.fixture?.status?.short === 'FT')
+    .filter((m) => m?.status?.short === 'FT' || m?.status?.short === 'AET')
     .slice(0, 10);
 
   return (
@@ -110,24 +99,24 @@ export default async function DashboardPage() {
           <CardHeader>
             <CardTitle>Premier League Standings</CardTitle>
             <CardDescription>
-              Current club standings for the {fallbackSeasonUsed ? currentSeason - 1 : currentSeason} season
+              Current club standings for the {fallbackSeasonUsed ? currentSeason - 1 : currentSeason} season.
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ClubStatsTable standings={standings} />
+            <ClubStatsTable standings={standings ?? []} />
           </CardContent>
         </Card>
 
         <div className="lg:col-span-3">
-          <GenAIPanel teams={teams} completedMatches={completedMatches} />
+          <GenAIPanel teams={teams ?? []} completedMatches={completedMatches ?? []} />
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
         <RecentMatches
-          liveMatches={liveFixtures}
-          upcomingMatches={upcomingMatches}
-          completedMatches={completedMatches}
+          liveMatches={liveFixtures ?? []}
+          upcomingMatches={upcomingMatches ?? []}
+          completedMatches={completedMatches ?? []}
         />
       </div>
     </div>
