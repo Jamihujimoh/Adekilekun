@@ -15,10 +15,11 @@ import { getFixtures, getStandings, getTeams } from '@/lib/api-football';
 import type { Team } from '@/types';
 
 export default async function DashboardPage() {
-  // Calculate current football season
   const now = new Date();
-  const currentSeason = now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
   const today = now.toISOString().slice(0, 10);
+
+  // Always display 2025
+  const currentSeason = 2025;
 
   // --- Fetch standings with fallback ---
   let standings = await getStandings({ league: '39', season: currentSeason });
