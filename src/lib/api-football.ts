@@ -1,15 +1,14 @@
 //'use server';
 
-const API_URL = 'https://v3.football.api-sports.io';
-const API_KEY = process.env.API_FOOTBALL_KEY;
+const API_URL = 'https://api.football-data.org/v4';
+const API_KEY = process.env.FOOTBALLDATA_API_KEY;
 
 if (!API_KEY) {
-  throw new Error('API_FOOTBALL_KEY is not defined in .env');
+  throw new Error('FOOTBALLDATA_API_KEY is not defined in .env');
 }
 
 const headers = {
-  'x-rapidapi-key': API_KEY,
-  'x-rapidapi-host': 'v3.football.api-sports.io',
+  'X-Auth-Token': API_KEY,
 };
 
 // ✅ Calculate correct season year
@@ -19,19 +18,26 @@ const currentMonth = today.getMonth() + 1;
 // Football season starts in August (8)
 const defaultSeason = currentMonth >= 8 ? currentYear : currentYear - 1;
 
-async function fetchFromApi(endpoint: string, params: Record<string, string>) {
+type Params = Record<string, string | undefined>;
+
+async function fetchFromApi(endpoint: string, params: Params = {}) {
   // ✅ If no season passed, use defaultSeason
   if (!params.season) {
     params.season = defaultSeason.toString();
   }
 
-  const url = new URL(`${API_URL}/${endpoint}`);
-  Object.entries(params).forEach(([key, value]) =>
-    url.searchParams.append(key, value)
-  );
+  // football-data.org uses different endpoints and query params
+  let url = `${API_URL}/${endpoint}`;
+
+  if (endpoint === 'matches') {
+    // Example for fixtures: use dateFrom/dateTo
+    const dateFrom = params.date || new Date().toISOString().slice(0, 10);
+    const dateTo = params.date || dateFrom;
+    url += `?dateFrom=${dateFrom}&dateTo=${dateTo}`;
+  }
 
   try {
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers,
     });
@@ -44,14 +50,9 @@ async function fetchFromApi(endpoint: string, params: Record<string, string>) {
     }
 
     const data = await response.json();
-    if (data.errors && Object.keys(data.errors).length > 0) {
-      console.error('API returned errors:', data.errors);
-      return [];
-    }
-
-    return data.response;
-  } catch (error) {
-    console.error('Failed to fetch from API-Football', error);
+    return data;
+  } catch (err) {
+    console.error('Failed to fetch from Football-Data API', err);
     return [];
   }
 }
@@ -62,21 +63,22 @@ export async function getFixtures(params: {
   league?: string;
   season?: string;
 }) {
-  return fetchFromApi('fixtures', params);
+  const data = await fetchFromApi('matches', params);
+  return data?.matches || [];
 }
 
 export async function getStandings(params: {
   league: string;
   season?: string; // ✅ Made optional
 }) {
-  const response = await fetchFromApi('standings', params);
-  // The standings are nested inside the response
-  return response[0]?.league?.standings[0] || [];
+  const data = await fetchFromApi(`competitions/${params.league}/standings`, params);
+  return data?.standings?.[0]?.table || [];
 }
 
 export async function getTeams(params: {
   league: string;
   season?: string; // ✅ Made optional
 }) {
-  return fetchFromApi('teams', params);
+  const data = await fetchFromApi(`competitions/${params.league}/teams`, params);
+  return data?.teams || [];
 }
